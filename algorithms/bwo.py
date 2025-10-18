@@ -1,15 +1,21 @@
 import numpy as np
-import pandas as pd
-import random
-
-from copy import deepcopy
+import random, time
 from sklearn.model_selection import StratifiedKFold, cross_val_score
-from sklearn.metrics import balanced_accuracy_score, make_scorer
 from sklearn.linear_model import LogisticRegression
 
 
-K_dim = XK.shape[1]
-alpha = 0.05   # sparsity penalty
+"""
+BWO
+"""
+# Pre-build classifier once (for cross_val_score)
+clf_bwo = LogisticRegression(
+    penalty="l2",
+    C=0.1,
+    solver="liblinear",
+    class_weight="balanced",
+    max_iter=5000,
+    random_state=42
+)
 
 
 def bwo_minimize(
@@ -25,10 +31,6 @@ def bwo_minimize(
     seed=None,
     disp=False
 ):
-    """
-    A robust BWO-like evolutionary search for binary feature masks.
-    objective_cv_func(mask) must return a scalar loss (lower=better).
-    """
 
     if seed is not None:
         np.random.seed(seed)
@@ -135,50 +137,38 @@ def bwo_minimize(
     return best_loss, best_mask, eval_cache
 
 
-# build classifier once (you may tune hyperparameters outside of this loop)
-clf = LogisticRegression(
-    penalty="l2",
-    C=0.1,
-    solver="liblinear",
-    class_weight="balanced",
-    max_iter=5000,
-    random_state=42
-)
+def bwo_select(X_train_scaled, y_train,
+               npop=30, maxiter=20, elitism=2,
+               crossover_prob=0.9, mutation_prob=0.01,
+               stagnation_inject_every=8, inject_fraction=0.25,
+               alpha=0.05, cv_folds=5, scoring='balanced_accuracy',
+               seed=42, disp=False):
+   
+    n_features = X_train_scaled.shape[1]
+    
+    def objective(mask):
+        mask = np.asarray(mask).astype(bool)
+        if not np.any(mask):
+            return 1.0  # huge loss for empty set
+        X_sub = X_train_scaled[:, mask]
+        skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
+        scores = cross_val_score(clf_bwo, X_sub, y_train, cv=skf, scoring=scoring, n_jobs=1)
+        sparsity_pen = alpha * (mask.sum() / n_features)
+        return 1.0 - float(np.mean(scores)) + sparsity_pen
 
-def cv_feature_mask_loss(mask, X, y, alpha=0.05, cv_folds=5, scoring='balanced_accuracy'):
-    """
-    mask: binary array-like length n_features
-    returns: loss = 1 - mean(cv_score) + sparsity_penalty
-    """
-    mask = np.asarray(mask).astype(bool)
-    if not np.any(mask):
-        return 1.0  # huge loss for empty set
+    best_loss, best_mask, _ = bwo_minimize(
+        objective_cv_func=objective,
+        n_features=n_features,
+        npop=npop,
+        maxiter=maxiter,
+        elitism=elitism,
+        crossover_prob=crossover_prob,
+        mutation_prob=mutation_prob,
+        stagnation_inject_every=stagnation_inject_every,
+        inject_fraction=inject_fraction,
+        seed=seed,
+        disp=disp
+    )
 
-    X_sub = X[:, mask]
-
-    # stratified CV to preserve class proportions
-    skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
-    # use cross_val_score (balanced accuracy better for imbalanced classes)
-    scores = cross_val_score(clf, X_sub, y, cv=skf, scoring=scoring, n_jobs=1)
-    mean_score = float(np.mean(scores))
-    sparsity_pen = alpha * (mask.sum() / X.shape[1])
-    loss = 1.0 - mean_score + sparsity_pen
-    return loss
-
-
-best_loss, best_mask, cache = bwo_minimize(
-    objective_cv_func=lambda m: cv_feature_mask_loss(m, XK, y, alpha=0.05, cv_folds=5),
-    n_features=K_dim,
-    npop=30,
-    maxiter=20,
-    elitism=2,
-    crossover_prob=0.9,
-    mutation_prob=0.01,   # lower per-bit mutation because p is large
-    stagnation_inject_every=8,
-    inject_fraction=0.25,
-    seed=42,
-    disp=True
-)
-
-print("Best loss (cv):", best_loss)
-print("Selected features:", int(best_mask.sum()), "/", K_dim)
+    selected_indices = np.where(best_mask == 1)[0]
+    return selected_indices
