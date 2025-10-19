@@ -8,6 +8,8 @@ import numpy as np
 SVM RFECV
 """
 def svm_rfe(X_train_scaled, y_train):
+    print("Selecting best features from SVM RFECV...")
+    
     # Define SVM with balanced class weight
     svm_model = SVC(kernel="linear", class_weight="balanced", random_state=42)
     
@@ -28,5 +30,6 @@ def svm_rfe(X_train_scaled, y_train):
     
     # Get selected feature indices
     selected_indices = np.where(selector_rfecv.support_)[0]
+    print("Done selecting best features from SVM RFECV.")
     
     return selected_indices

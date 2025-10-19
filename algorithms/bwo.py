@@ -7,29 +7,18 @@ from sklearn.linear_model import LogisticRegression
 """
 BWO
 """
-# Pre-build classifier once (for cross_val_score)
-clf_bwo = LogisticRegression(
-    penalty="l2",
-    C=0.1,
-    solver="liblinear",
-    class_weight="balanced",
-    max_iter=5000,
-    random_state=42
-)
-
-
 def bwo_minimize(
-    objective_cv_func,        # function(mask) -> loss (lower is better). Should accept binary list/array
+    objective_cv_func,        
     n_features,
     npop=30,
     maxiter=20,
     elitism=2,
     crossover_prob=0.9,
-    mutation_prob=0.02,       # per-gene bit-flip probability
+    mutation_prob=0.02,       
     stagnation_inject_every=10,
     inject_fraction=0.25,
     seed=None,
-    disp=False
+    verbose=False
 ):
 
     if seed is not None:
@@ -46,7 +35,6 @@ def bwo_minimize(
             # flip a random bit on
             pop[i][np.random.randint(0, n_features)] = 1
 
-    # evaluation cache (use tuple(mask) as key)
     eval_cache = {}
 
     def eval_mask(mask):
@@ -60,8 +48,6 @@ def bwo_minimize(
     best_loss = float('inf')
     best_mask = None
     no_improve = 0
-
-    start_time = time.time()
 
     for epoch in range(1, maxiter+1):
         # Evaluate and sort by loss (ascending)
@@ -78,7 +64,7 @@ def bwo_minimize(
         else:
             no_improve += 1
 
-        if disp:
+        if verbose:
             print(f"> ITER {epoch}/{maxiter} | best_loss={best_loss:.6f} | median={np.median(losses):.6f} | pop={len(pop)}")
 
         # elitism: preserve top `elitism`
@@ -126,30 +112,45 @@ def bwo_minimize(
                 if mask.sum() == 0:
                     mask[np.random.randint(0, n_features)] = 1
                 pop[-i] = mask
-            if disp:
+            if verbose:
                 print(f"[stagnation] injected {n_replace} random individuals at epoch {epoch}")
             no_improve = 0
-
-    total_time = time.time() - start_time
-    if disp:
-        print("Total time: {:.3f}s".format(total_time))
 
     return best_loss, best_mask, eval_cache
 
 
-def bwo_select(X_train_scaled, y_train,
-               npop=30, maxiter=20, elitism=2,
-               crossover_prob=0.9, mutation_prob=0.01,
-               stagnation_inject_every=8, inject_fraction=0.25,
-               alpha=0.05, cv_folds=5, scoring='balanced_accuracy',
-               seed=42, disp=False):
+def bwo_select(X_train_scaled, 
+               y_train,
+               npop=30, 
+               maxiter=20, 
+               elitism=2,
+               crossover_prob=0.9, 
+               mutation_prob=0.02,
+               stagnation_inject_every=10, 
+               inject_fraction=0.25,
+               alpha=0.05, 
+               cv_folds=5, 
+               scoring='balanced_accuracy',
+               seed=42, 
+               verbose=False
+               ):
    
+    print("Selecting best features from BWO...")
     n_features = X_train_scaled.shape[1]
+    
+    clf_bwo = LogisticRegression(
+        penalty="l2",
+        C=0.1,
+        solver="liblinear",
+        class_weight="balanced",
+        max_iter=5000,
+        random_state=42
+        )
     
     def objective(mask):
         mask = np.asarray(mask).astype(bool)
         if not np.any(mask):
-            return 1.0  # huge loss for empty set
+            return 1.0  
         X_sub = X_train_scaled[:, mask]
         skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
         scores = cross_val_score(clf_bwo, X_sub, y_train, cv=skf, scoring=scoring, n_jobs=1)
@@ -167,8 +168,10 @@ def bwo_select(X_train_scaled, y_train,
         stagnation_inject_every=stagnation_inject_every,
         inject_fraction=inject_fraction,
         seed=seed,
-        disp=disp
+        verbose=verbose
     )
 
     selected_indices = np.where(best_mask == 1)[0]
+    print("Done selecting best features from BWO.")
+    
     return selected_indices

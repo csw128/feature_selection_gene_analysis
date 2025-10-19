@@ -24,15 +24,16 @@ def fitness(ind, X, y, alpha=0.01):
 # PBIL-style GA 
 def ga_select(X_train_scaled, 
                 y_train, 
-                generations=50, 
-                pop_size=50, 
+                generations=20, 
+                pop_size=30, 
                 learning_rate=0.1,
-                alpha=0.01, 
-                init_prob=0.05, 
+                alpha=0.05, 
+                init_prob=0.02, 
                 max_features=250,
                 verbose=False
                 ):
     
+    print("Selecting best features from GA PBIL...")
     n_features = X_train_scaled.shape[1]
 
     # Initialize feature probability vector
@@ -69,4 +70,6 @@ def ga_select(X_train_scaled,
         
     # Return indices of selected features
     selected_indices = np.where(best_mask==1)[0]
+    print("Done selecting best features from GA PBIL.")
+    
     return selected_indices
