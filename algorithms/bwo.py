@@ -1,5 +1,5 @@
 import numpy as np
-import random, time
+import random
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
 
@@ -7,33 +7,56 @@ from sklearn.linear_model import LogisticRegression
 """
 BWO
 """
+def _enforce_max_features(mask, max_features, rng=None):
+    if max_features is None:
+        return mask
+    
+    m = mask.copy()
+    n_on = int(m.sum())
+    if n_on > max_features:
+        ones_idx = np.flatnonzero(m)
+        if rng is None:
+            turn_off = np.random.choice(ones_idx, size=(n_on - max_features), replace=False)
+        else:
+            turn_off = rng.choice(ones_idx, size=(n_on - max_features), replace=False)
+        m[turn_off] = 0
+        
+    return m
+
+
 def bwo_minimize(
     objective_cv_func,        
     n_features,
     npop=30,
-    maxiter=20,
+    maxiter=50,
     elitism=2,
     crossover_prob=0.9,
-    mutation_prob=0.02,       
+    mutation_prob=0.02,      
     stagnation_inject_every=10,
     inject_fraction=0.25,
     seed=None,
-    verbose=False
+    verbose=False,
+    max_features=None         
 ):
 
     if seed is not None:
         np.random.seed(seed)
         random.seed(seed)
+        rng = np.random.RandomState(seed)
+    else:
+        rng = None
 
     assert elitism >= 0 and elitism < npop
 
-    # initialize population: binary masks
-    pop = [np.random.choice([0,1], size=n_features).astype(int) for _ in range(npop)]
-    # Ensure no-all-zero individuals (otherwise objective should handle it)
-    for i in range(len(pop)):
-        if pop[i].sum() == 0:
-            # flip a random bit on
-            pop[i][np.random.randint(0, n_features)] = 1
+    # initialize population: binary masks (respecting max_features)
+    pop = []
+    for _ in range(npop):
+        mask = np.random.choice([0,1], size=n_features).astype(int)
+        mask = _enforce_max_features(mask, max_features, rng=rng)
+        if mask.sum() == 0:
+            idx = rng.randint(0, n_features) if rng is not None else np.random.randint(0, n_features)
+            mask[idx] = 1
+        pop.append(mask)
 
     eval_cache = {}
 
@@ -50,7 +73,6 @@ def bwo_minimize(
     no_improve = 0
 
     for epoch in range(1, maxiter+1):
-        # Evaluate and sort by loss (ascending)
         losses = [eval_mask(m) for m in pop]
         idx_sorted = np.argsort(losses)
         pop = [pop[i] for i in idx_sorted]
@@ -65,7 +87,9 @@ def bwo_minimize(
             no_improve += 1
 
         if verbose:
-            print(f"> ITER {epoch}/{maxiter} | best_loss={best_loss:.6f} | median={np.median(losses):.6f} | pop={len(pop)}")
+            median_loss = np.median(losses)
+            avg_selected = np.mean([m.sum() for m in pop])
+            print(f"> ITER {epoch}/{maxiter} | best_loss={best_loss:.6f} | median={median_loss:.6f} | avg_selected={avg_selected:.1f}")
 
         # elitism: preserve top `elitism`
         new_pop = [pop[i].copy() for i in range(elitism)]
@@ -83,38 +107,46 @@ def bwo_minimize(
 
             # crossover (uniform crossover with prob)
             if np.random.rand() < crossover_prob:
-                mask_child = p1.copy()
                 # uniform crossover per bit
                 swap = np.random.rand(n_features) < 0.5
-                mask_child[swap] = p2[swap]
+                child = p1.copy()
+                child[swap] = p2[swap]
             else:
                 # no crossover, clone parent
-                mask_child = p1.copy()
+                child = p1.copy()
 
             # mutation: bit-flip with mutation_prob
             flip = np.random.rand(n_features) < mutation_prob
-            mask_child[flip] = 1 - mask_child[flip]
+            if flip.any():
+                child[flip] = 1 - child[flip]
+
+            # Enforce max_features cap (hard truncation if necessary)
+            child = _enforce_max_features(child, max_features, rng=rng)
 
             # ensure not empty
-            if mask_child.sum() == 0:
-                mask_child[np.random.randint(0, n_features)] = 1
+            if child.sum() == 0:
+                idx = rng.randint(0, n_features) if rng is not None else np.random.randint(0, n_features)
+                child[idx] = 1
 
-            new_pop.append(mask_child)
+            new_pop.append(child)
 
         pop = new_pop
 
         # stagnation injection
         if no_improve >= stagnation_inject_every:
             n_replace = max(1, int(inject_fraction * npop))
-            # replace worst n_replace individuals with random masks
+            # replace worst n_replace individuals with random masks 
             for i in range(1, n_replace+1):
                 mask = np.random.choice([0,1], size=n_features).astype(int)
+                mask = _enforce_max_features(mask, max_features, rng=rng)
                 if mask.sum() == 0:
-                    mask[np.random.randint(0, n_features)] = 1
+                    idx = rng.randint(0, n_features) if rng is not None else np.random.randint(0, n_features)
+                    mask[idx] = 1
                 pop[-i] = mask
             if verbose:
                 print(f"[stagnation] injected {n_replace} random individuals at epoch {epoch}")
             no_improve = 0
+
 
     return best_loss, best_mask, eval_cache
 
@@ -132,7 +164,7 @@ def bwo_select(X_train_scaled,
                cv_folds=5, 
                scoring='balanced_accuracy',
                seed=42, 
-               verbose=False
+               verbose=False,
                ):
    
     print("Selecting best features from BWO...")
@@ -168,7 +200,8 @@ def bwo_select(X_train_scaled,
         stagnation_inject_every=stagnation_inject_every,
         inject_fraction=inject_fraction,
         seed=seed,
-        verbose=verbose
+        verbose=verbose,
+        max_features=250
     )
 
     selected_indices = np.where(best_mask == 1)[0]
