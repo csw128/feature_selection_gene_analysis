@@ -26,10 +26,10 @@ def ga_select(X_train_scaled,
                 y_train, 
                 generations=20, 
                 pop_size=30, 
-                learning_rate=0.1,
-                alpha=0.05, 
-                init_prob=0.02, 
-                max_features=250,
+                learning_rate=0.3,
+                alpha=0.1, 
+                init_prob=0.05, 
+                max_features=150,
                 verbose=False
                 ):
     
@@ -66,7 +66,7 @@ def ga_select(X_train_scaled,
         p = (1 - learning_rate) * p + learning_rate * best_mask
 
         if verbose:
-            print(f"Gen {gen}: best CV acc={best_score:.3f}, features={best_mask.sum()}")
+            print(f"PBIL | Gen {gen} | best_score={best_score:.3f} | n_features={best_mask.sum()}")
         
     # Return indices of selected features
     selected_indices = np.where(best_mask==1)[0]

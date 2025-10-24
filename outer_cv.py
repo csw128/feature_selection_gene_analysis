@@ -2,22 +2,25 @@
 
 from utils import normalize_train_test, evaluate_svm
 from algorithms.svmrfe import svm_rfe
-from algorithms.gapbil import ga_select
+from algorithms.pbil import ga_select
+from algorithms.sa import sa_select
 from algorithms.bwo import bwo_select
 import pandas as pd
 
 
-## 8-2 split
+# 8-2 split
 def nested_cv_experiment(X, y, foldlist):
     outer_results = {
         'svm_rfe': [],
-        'ga': [],
+        'pbil': [],
+        'sa': [],
         'bwo': []
     }
 
     outer_selected_features = {
     'svm_rfe': [],
-    'ga': [],
+    'pbil': [],
+    'sa': [],
     'bwo': []
     }
 
@@ -31,7 +34,7 @@ def nested_cv_experiment(X, y, foldlist):
         
         # Loop over outer iterations (test fold = 1 fold)
         for iter_idx, (f1, f2) in enumerate(test_pairs):
-            print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {iter_idx+1}/{len(test_pairs)} (test folds {f1+1},{f2+1})")
+            print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {iter_idx+1}/{len(test_pairs)}")
             
             # Split train/test
             test_idx = outer_folds[f1] + outer_folds[f2]
@@ -54,14 +57,14 @@ def nested_cv_experiment(X, y, foldlist):
             # Run feature selection algorithms to return the best feature indices
             best_features_svm = svm_rfe(X_train_scaled, y_train)
             best_features_ga = ga_select(X_train_scaled, y_train, verbose=True)
+            best_features_sa = sa_select(X_train_scaled, y_train, verbose=True)
             best_features_bwo = bwo_select(X_train_scaled, y_train, verbose=True)
             
             # Store best features for record
             outer_selected_features['svm_rfe'].append(best_features_svm)
-            outer_selected_features['ga'].append(best_features_ga)
+            outer_selected_features['pbil'].append(best_features_ga)
+            outer_selected_features['sa'].append(best_features_ga)
             outer_selected_features['bwo'].append(best_features_bwo)
-            
-            # print("outer selected features: ", outer_selected_features)
 
             # Evaluate SVM on the selected features 
             metrics_svm = evaluate_svm(X_train_scaled[:, best_features_svm], y_train,
@@ -70,57 +73,64 @@ def nested_cv_experiment(X, y, foldlist):
             metrics_ga = evaluate_svm(X_train_scaled[:, best_features_ga], y_train,
                                   X_test_scaled[:, best_features_ga], y_test)
             
+            metrics_sa = evaluate_svm(X_train_scaled[:, best_features_sa], y_train,
+                                  X_test_scaled[:, best_features_sa], y_test)
+            
             metrics_bwo = evaluate_svm(X_train_scaled[:, best_features_bwo], y_train,
                                    X_test_scaled[:, best_features_bwo], y_test)
             
             # Store results
             outer_results['svm_rfe'].append(metrics_svm)
-            outer_results['ga'].append(metrics_ga)
+            outer_results['pbil'].append(metrics_ga)
+            outer_results['sa'].append(metrics_sa)
             outer_results['bwo'].append(metrics_bwo)
 
-            print("outer results: ", outer_results)
+            ## Test print results
+            print(f'Outer Results: Repeat {repeat_idx+1}/{len(foldlist)}, k fold {iter_idx+1}/{len(test_pairs)}')
+            for k, v in outer_results.items():
+                print(k, v)
             
-        #     break
+            break
         
-        # break
+        break
+        ## 
     
-    # Aggregate results
-    summary = {}
+    # # Aggregate results
+    # summary = {}
 
-    for algo, results in outer_results.items():
-        # Convert list of dicts → DataFrame
-        df = pd.DataFrame(results)
+    # for algo, results in outer_results.items():
+    #     # Convert list of dicts → DataFrame
+    #     df = pd.DataFrame(results)
         
-        # Compute mean and std for each metric
-        mean_metrics = df.mean(numeric_only=True)
-        std_metrics = df.std(numeric_only=True)
+    #     # Compute mean and std for each metric
+    #     mean_metrics = df.mean(numeric_only=True)
+    #     std_metrics = df.std(numeric_only=True)
         
-        # Combine into a summary dict
-        summary[algo] = {
-            metric: {"mean": mean_metrics[metric], "std": std_metrics[metric]}
-            for metric in mean_metrics.index
-        }
+    #     # Combine into a summary dict
+    #     summary[algo] = {
+    #         metric: {"mean": mean_metrics[metric], "std": std_metrics[metric]}
+    #         for metric in mean_metrics.index
+    #     }
 
-    return summary
-
-
+    # return summary
 
 
 
-## 9-1 split
+
+
+# # 9-1 split
 # def nested_cv_experiment(X, y, foldlist):
 #     outer_results = {
 #         'svm_rfe': [],
-#         'ga': [],
+#         'pbil': [],
 #         'bwo': []
 #     }
 
 #     outer_selected_features = {
 #     'svm_rfe': [],
-#     'ga': [],
+#     'pbil': [],
 #     'bwo': []
 #     }
-
 
 #     # Loop over outer repetitions
 #     for repeat_idx, outer_folds in enumerate(foldlist):
@@ -148,10 +158,8 @@ def nested_cv_experiment(X, y, foldlist):
             
 #             # Store best features for record
 #             outer_selected_features['svm_rfe'].append(best_features_svm)
-#             outer_selected_features['ga'].append(best_features_ga)
+#             outer_selected_features['pbil'].append(best_features_ga)
 #             outer_selected_features['bwo'].append(best_features_bwo)
-            
-#             print("outer selected features: ", outer_selected_features)
 
 #             # Evaluate SVM on the selected features 
 #             metrics_svm = evaluate_svm(X_train_scaled[:, best_features_svm], y_train,
@@ -165,10 +173,12 @@ def nested_cv_experiment(X, y, foldlist):
             
 #             # Store results
 #             outer_results['svm_rfe'].append(metrics_svm)
-#             outer_results['ga'].append(metrics_ga)
+#             outer_results['pbil'].append(metrics_ga)
 #             outer_results['bwo'].append(metrics_bwo)
 
-#             print("outer results: ", outer_results)
+#             print("outer results: ")
+#             for k, v in outer_results.items():
+#                print(k, v)
             
 #             break
         

@@ -28,7 +28,7 @@ def bwo_minimize(
     objective_cv_func,        
     n_features,
     npop=30,
-    maxiter=50,
+    maxiter=20,
     elitism=2,
     crossover_prob=0.9,
     mutation_prob=0.02,      
@@ -48,7 +48,7 @@ def bwo_minimize(
 
     assert elitism >= 0 and elitism < npop
 
-    # initialize population: binary masks (respecting max_features)
+    # initialize population
     pop = []
     for _ in range(npop):
         mask = np.random.choice([0,1], size=n_features).astype(int)
@@ -68,62 +68,57 @@ def bwo_minimize(
         eval_cache[key] = val
         return val
 
-    best_loss = float('inf')
+    best_score = -float('inf')
     best_mask = None
     no_improve = 0
 
     for epoch in range(1, maxiter+1):
-        losses = [eval_mask(m) for m in pop]
-        idx_sorted = np.argsort(losses)
+        scores = [eval_mask(m) for m in pop]
+        idx_sorted = np.argsort(scores)[::-1]
         pop = [pop[i] for i in idx_sorted]
-        losses = [losses[i] for i in idx_sorted]
+        scores = [scores[i] for i in idx_sorted]
 
         # update best
-        if losses[0] < best_loss - 1e-12:
-            best_loss = float(losses[0])
+        if scores[0] > best_score + 1e-12:
+            best_score = float(scores[0])
             best_mask = pop[0].copy()
             no_improve = 0
         else:
             no_improve += 1
 
         if verbose:
-            median_loss = np.median(losses)
-            avg_selected = np.mean([m.sum() for m in pop])
-            print(f"> ITER {epoch}/{maxiter} | best_loss={best_loss:.6f} | median={median_loss:.6f} | avg_selected={avg_selected:.1f}")
+            median_score = np.median(scores)
+            n_features_best = best_mask.sum()
+            print(f"BWO | Gen {epoch} | best_score={best_score:.6f} | median_score={median_score:.6f} | n_features_best={n_features_best}")
 
-        # elitism: preserve top `elitism`
+        # elitism
         new_pop = [pop[i].copy() for i in range(elitism)]
 
-        # generate offspring until we reach npop
+        # generate offspring
         while len(new_pop) < npop:
-            # tournament selection (size=3)
             def tournament():
                 contenders = np.random.choice(npop, size=3, replace=False)
-                best = min(contenders, key=lambda i: losses[i])
+                best = max(contenders, key=lambda i: scores[i])
                 return pop[best]
 
             p1 = tournament()
             p2 = tournament()
 
-            # crossover (uniform crossover with prob)
+            # crossover 
             if np.random.rand() < crossover_prob:
-                # uniform crossover per bit
                 swap = np.random.rand(n_features) < 0.5
                 child = p1.copy()
                 child[swap] = p2[swap]
             else:
-                # no crossover, clone parent
                 child = p1.copy()
 
-            # mutation: bit-flip with mutation_prob
+            # mutation:
             flip = np.random.rand(n_features) < mutation_prob
             if flip.any():
                 child[flip] = 1 - child[flip]
 
-            # Enforce max_features cap (hard truncation if necessary)
+            # enforce limits
             child = _enforce_max_features(child, max_features, rng=rng)
-
-            # ensure not empty
             if child.sum() == 0:
                 idx = rng.randint(0, n_features) if rng is not None else np.random.randint(0, n_features)
                 child[idx] = 1
@@ -135,7 +130,6 @@ def bwo_minimize(
         # stagnation injection
         if no_improve >= stagnation_inject_every:
             n_replace = max(1, int(inject_fraction * npop))
-            # replace worst n_replace individuals with random masks 
             for i in range(1, n_replace+1):
                 mask = np.random.choice([0,1], size=n_features).astype(int)
                 mask = _enforce_max_features(mask, max_features, rng=rng)
@@ -148,7 +142,7 @@ def bwo_minimize(
             no_improve = 0
 
 
-    return best_loss, best_mask, eval_cache
+    return best_score, best_mask, eval_cache
 
 
 def bwo_select(X_train_scaled, 
@@ -162,7 +156,7 @@ def bwo_select(X_train_scaled,
                inject_fraction=0.25,
                alpha=0.05, 
                cv_folds=5, 
-               scoring='balanced_accuracy',
+               scoring='accuracy',
                seed=42, 
                verbose=False,
                ):
@@ -174,7 +168,6 @@ def bwo_select(X_train_scaled,
         penalty="l2",
         C=0.1,
         solver="liblinear",
-        class_weight="balanced",
         max_iter=5000,
         random_state=42
         )
@@ -182,14 +175,17 @@ def bwo_select(X_train_scaled,
     def objective(mask):
         mask = np.asarray(mask).astype(bool)
         if not np.any(mask):
-            return 1.0  
+            return -1.0 
+        
         X_sub = X_train_scaled[:, mask]
         skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
         scores = cross_val_score(clf_bwo, X_sub, y_train, cv=skf, scoring=scoring, n_jobs=1)
+        mean_score = float(np.mean(scores))
         sparsity_pen = alpha * (mask.sum() / n_features)
-        return 1.0 - float(np.mean(scores)) + sparsity_pen
+        score = mean_score - sparsity_pen
+        return score
 
-    best_loss, best_mask, _ = bwo_minimize(
+    best_score, best_mask, _ = bwo_minimize(
         objective_cv_func=objective,
         n_features=n_features,
         npop=npop,
@@ -201,7 +197,7 @@ def bwo_select(X_train_scaled,
         inject_fraction=inject_fraction,
         seed=seed,
         verbose=verbose,
-        max_features=250
+        max_features=150
     )
 
     selected_indices = np.where(best_mask == 1)[0]

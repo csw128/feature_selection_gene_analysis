@@ -7,7 +7,7 @@ from utils import create_outer_foldlist
 # Synthetic dataset
 X, y = make_classification(
     n_samples=40,
-    n_features=1000,
+    n_features=2000,
     n_informative=100,
     n_redundant=5,
     n_repeated=0,

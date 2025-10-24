@@ -11,7 +11,7 @@ def svm_rfe(X_train_scaled, y_train):
     print("Selecting best features from SVM RFECV...")
     
     # Define SVM with balanced class weight
-    svm_model = SVC(kernel="linear", class_weight="balanced", random_state=42)
+    svm_model = SVC(kernel="linear", random_state=42)
     
     # 5-fold CV for RFECV
     cv_strategy = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
