@@ -122,6 +122,8 @@ def sa_select(X_train_scaled,
               random_state=42,
               verbose=False):
     
+    print("Selecting best features from SA...")
+    
     res = simulated_annealing_feature_selection(
         X_train_scaled,               
         y_train,                      
@@ -138,5 +140,7 @@ def sa_select(X_train_scaled,
 
     best_mask = res.get("best_mask")
     selected_indices = np.where(np.asarray(best_mask, dtype=bool))[0]
+    
+    print("Done selecting best features from SA.")
     
     return selected_indices

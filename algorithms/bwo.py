@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 
 
 """
-BWO
+BWO (Black Widow Optimization)
 """
 def _enforce_max_features(mask, max_features, rng=None):
     if max_features is None:

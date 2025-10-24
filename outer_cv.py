@@ -1,6 +1,8 @@
 # Outer CV 
 
 from utils import normalize_train_test, evaluate_svm
+from algorithms.random_filter import random_select
+from algorithms.pearson_corr import pearson_select
 from algorithms.svmrfe import svm_rfe
 from algorithms.pbil import ga_select
 from algorithms.sa import sa_select
@@ -11,6 +13,8 @@ import pandas as pd
 # 8-2 split
 def nested_cv_experiment(X, y, foldlist):
     outer_results = {
+        'rand_sel': [],
+        'pear_corr': [],
         'svm_rfe': [],
         'pbil': [],
         'sa': [],
@@ -18,10 +22,12 @@ def nested_cv_experiment(X, y, foldlist):
     }
 
     outer_selected_features = {
-    'svm_rfe': [],
-    'pbil': [],
-    'sa': [],
-    'bwo': []
+        'rand_sel': [],
+        'pear_corr': [],
+        'svm_rfe': [],
+        'pbil': [],
+        'sa': [],
+        'bwo': []
     }
 
     # Loop over outer repetitions
@@ -55,18 +61,28 @@ def nested_cv_experiment(X, y, foldlist):
             print("Normalised current fold train test set.")
             
             # Run feature selection algorithms to return the best feature indices
+            best_features_random = random_select(X_train_scaled)
+            best_features_pearson = pearson_select(X_train_scaled, y_train)
             best_features_svm = svm_rfe(X_train_scaled, y_train)
             best_features_ga = ga_select(X_train_scaled, y_train, verbose=True)
             best_features_sa = sa_select(X_train_scaled, y_train, verbose=True)
             best_features_bwo = bwo_select(X_train_scaled, y_train, verbose=True)
             
             # Store best features for record
+            outer_selected_features['rand_sel'].append(best_features_random)
+            outer_selected_features['pear_corr'].append(best_features_pearson)
             outer_selected_features['svm_rfe'].append(best_features_svm)
             outer_selected_features['pbil'].append(best_features_ga)
             outer_selected_features['sa'].append(best_features_ga)
             outer_selected_features['bwo'].append(best_features_bwo)
 
             # Evaluate SVM on the selected features 
+            metrics_rand_sel = evaluate_svm(X_train_scaled[:, best_features_random], y_train,
+                                   X_test_scaled[:, best_features_random], y_test)
+            
+            metrics_pearson = evaluate_svm(X_train_scaled[:, best_features_pearson], y_train,
+                                   X_test_scaled[:, best_features_pearson], y_test)
+            
             metrics_svm = evaluate_svm(X_train_scaled[:, best_features_svm], y_train,
                                    X_test_scaled[:, best_features_svm], y_test)
             
@@ -80,6 +96,8 @@ def nested_cv_experiment(X, y, foldlist):
                                    X_test_scaled[:, best_features_bwo], y_test)
             
             # Store results
+            outer_results['rand_sel'].append(metrics_rand_sel)
+            outer_results['pear_corr'].append(metrics_pearson)
             outer_results['svm_rfe'].append(metrics_svm)
             outer_results['pbil'].append(metrics_ga)
             outer_results['sa'].append(metrics_sa)

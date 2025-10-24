@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 
 
 """
-GA PBIL (Population-Based Incremental Learning)
+PBIL (Population-Based Incremental Learning)
 """
 rng = np.random.default_rng(42)
 
