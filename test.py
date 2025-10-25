@@ -20,7 +20,7 @@ rng = np.random.default_rng(42)
 
 foldlist = create_outer_foldlist(n_samples=40, n_folds=10, n_repeats=10)
 
-summary, results, features = nested_cv_experiment(X, y, foldlist)
+summary, features = nested_cv_experiment(X, y, foldlist)
 
 
 

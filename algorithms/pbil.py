@@ -22,7 +22,7 @@ def fitness(ind, X, y, alpha=0.01):
 
 
 # PBIL-style GA 
-def ga_select(X_train_scaled, 
+def pbil_select(X_train_scaled, 
                 y_train, 
                 generations=20, 
                 pop_size=30, 
