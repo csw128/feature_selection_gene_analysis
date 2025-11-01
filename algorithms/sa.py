@@ -1,13 +1,13 @@
 import numpy as np
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
 from math import exp
+
 
 """
 SA (Simulated Annealing)
 """
-
-def fitness(ind, X, y, alpha=0.01, cache=None):
+def fitness(ind, X, y, alpha=None, cache=None):
     key = tuple(np.nonzero(ind)[0])
     if cache is not None and key in cache:
         return cache[key]
@@ -20,8 +20,9 @@ def fitness(ind, X, y, alpha=0.01, cache=None):
         return val
 
     X_sel = X[:, ind]
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     clf = LogisticRegression(solver="liblinear", max_iter=2000)
-    score = cross_val_score(clf, X_sel, y, cv=5, scoring="accuracy").mean()
+    score = cross_val_score(clf, X_sel, y, cv=skf, scoring="accuracy").mean()
     penalty = alpha * (n_selected / X.shape[1])
     val = score - penalty
 
@@ -32,15 +33,14 @@ def fitness(ind, X, y, alpha=0.01, cache=None):
 
 def simulated_annealing_feature_selection(X, y,
                                           fitness_func,
-                                          max_generations=20,
-                                          max_features=150,
-                                          alpha=0.01,
-                                          initial_temp=1.0,
-                                          cooling_rate=0.98,
-                                          min_temp=1e-4,
-                                          random_state=42,
-                                          verbose=True):
-    rng = np.random.default_rng(random_state)
+                                          max_generations=None,
+                                          max_features=None,
+                                          alpha=None,
+                                          initial_temp=None,
+                                          cooling_rate=None,
+                                          min_temp=None,
+                                          ):
+    
     n_features = X.shape[1]
     cache = {}
 
@@ -99,9 +99,8 @@ def simulated_annealing_feature_selection(X, y,
             best = current.copy()
 
         history.append((gen, best_score, best.sum()))
-
-        if verbose:
-            print(f"SA | Gen {gen:3d} | temp={T:.4f} | current_score={current_score:.4f} | best_score={best_score:.4f} | n_features={best.sum():4d}")
+        
+        print(f"SA | Gen {gen:3d} | temp={T:.4f} | current_score={current_score:.4f} | best_score={best_score:.4f} | n_features={best.sum():4d}")
 
         T = max(min_temp, T * cooling_rate)
 
@@ -119,8 +118,10 @@ def sa_select(X_train_scaled,
               initial_temp=1.5,
               cooling_rate=0.99,
               min_temp=1e-4,
-              random_state=42,
-              verbose=False):
+              ):
+    
+    global rng
+    rng = np.random.default_rng(42)
     
     print("Selecting best features from SA...")
     
@@ -133,9 +134,7 @@ def sa_select(X_train_scaled,
         alpha=alpha,
         initial_temp=initial_temp,
         cooling_rate=cooling_rate,
-        min_temp=min_temp,
-        random_state=random_state,
-        verbose=verbose
+        min_temp=min_temp
     )
 
     best_mask = res.get("best_mask")

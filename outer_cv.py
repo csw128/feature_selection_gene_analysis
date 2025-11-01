@@ -2,6 +2,7 @@ from utils import normalize_train_test, train_and_predict_labels
 from algorithms.random_filter import random_select
 from algorithms.pearson_corr import pearson_select
 from algorithms.svmrfe import svm_rfe
+from algorithms.ga import ga_select
 from algorithms.pbil import pbil_select
 from algorithms.sa import sa_select
 from algorithms.bwo import bwo_select
@@ -13,11 +14,11 @@ selectors = {
         'rand_sel': lambda Xtr, ytr: random_select(Xtr),
         'pear_corr': lambda Xtr, ytr: pearson_select(Xtr, ytr),
         'svm_rfe': lambda Xtr, ytr: svm_rfe(Xtr, ytr),
-        'pbil': lambda Xtr, ytr: pbil_select(Xtr, ytr, verbose=True),
-        'sa': lambda Xtr, ytr: sa_select(Xtr, ytr, verbose=True),
-        'bwo': lambda Xtr, ytr: bwo_select(Xtr, ytr, verbose=True)
+        'ga': lambda Xtr, ytr: ga_select(Xtr, ytr),
+        'pbil': lambda Xtr, ytr: pbil_select(Xtr, ytr),
+        'sa': lambda Xtr, ytr: sa_select(Xtr, ytr),
+        'bwo': lambda Xtr, ytr: bwo_select(Xtr, ytr)
     }
-
 
 # 9-1 split
 def nested_cv_experiment(X, y, foldlist):
@@ -90,7 +91,7 @@ def nested_cv_experiment(X, y, foldlist):
             outer_selected_features_agg[algo].append(agg_info)
 
         for algo in selectors.keys():
-            print(f"  {algo}: {outer_results[algo][-1]:.4f}")
+            print(f"{algo}: {outer_results[algo][-1]:.4f}")
          
         break
     

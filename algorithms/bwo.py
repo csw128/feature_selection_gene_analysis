@@ -7,7 +7,7 @@ from sklearn.linear_model import LogisticRegression
 """
 BWO (Black Widow Optimization)
 """
-def _enforce_max_features(mask, max_features, rng=None):
+def _enforce_max_features(mask, max_features):
     if max_features is None:
         return mask
     
@@ -15,10 +15,7 @@ def _enforce_max_features(mask, max_features, rng=None):
     n_on = int(m.sum())
     if n_on > max_features:
         ones_idx = np.flatnonzero(m)
-        if rng is None:
-            turn_off = np.random.choice(ones_idx, size=(n_on - max_features), replace=False)
-        else:
-            turn_off = rng.choice(ones_idx, size=(n_on - max_features), replace=False)
+        turn_off = rng.choice(ones_idx, size=(n_on - max_features), replace=False)
         m[turn_off] = 0
         
     return m
@@ -27,34 +24,23 @@ def _enforce_max_features(mask, max_features, rng=None):
 def bwo_minimize(
     objective_cv_func,        
     n_features,
-    npop=30,
-    maxiter=20,
-    elitism=2,
-    crossover_prob=0.9,
-    mutation_prob=0.02,      
-    stagnation_inject_every=10,
-    inject_fraction=0.25,
-    seed=None,
-    verbose=False,
+    npop=None,
+    maxiter=None,
+    elitism=None,
+    crossover_prob=None,
+    mutation_prob=None,      
+    stagnation_inject_every=None,
+    inject_fraction=None,
     max_features=None         
 ):
-
-    if seed is not None:
-        np.random.seed(seed)
-        random.seed(seed)
-        rng = np.random.RandomState(seed)
-    else:
-        rng = None
-
-    assert elitism >= 0 and elitism < npop
-
+    
     # initialize population
     pop = []
     for _ in range(npop):
         mask = np.random.choice([0,1], size=n_features).astype(int)
-        mask = _enforce_max_features(mask, max_features, rng=rng)
+        mask = _enforce_max_features(mask, max_features)
         if mask.sum() == 0:
-            idx = rng.randint(0, n_features) if rng is not None else np.random.randint(0, n_features)
+            idx = rng.randint(0, n_features)
             mask[idx] = 1
         pop.append(mask)
 
@@ -86,10 +72,9 @@ def bwo_minimize(
         else:
             no_improve += 1
 
-        if verbose:
-            median_score = np.median(scores)
-            n_features_best = best_mask.sum()
-            print(f"BWO | Gen {epoch} | best_score={best_score:.6f} | median_score={median_score:.6f} | n_features_best={n_features_best}")
+        median_score = np.median(scores)
+        n_features_best = best_mask.sum()
+        print(f"BWO | Gen {epoch} | best_score={best_score:.6f} | median_score={median_score:.6f} | n_features_best={n_features_best}")
 
         # elitism
         new_pop = [pop[i].copy() for i in range(elitism)]
@@ -118,9 +103,9 @@ def bwo_minimize(
                 child[flip] = 1 - child[flip]
 
             # enforce limits
-            child = _enforce_max_features(child, max_features, rng=rng)
+            child = _enforce_max_features(child, max_features)
             if child.sum() == 0:
-                idx = rng.randint(0, n_features) if rng is not None else np.random.randint(0, n_features)
+                idx = rng.randint(0, n_features)
                 child[idx] = 1
 
             new_pop.append(child)
@@ -132,13 +117,13 @@ def bwo_minimize(
             n_replace = max(1, int(inject_fraction * npop))
             for i in range(1, n_replace+1):
                 mask = np.random.choice([0,1], size=n_features).astype(int)
-                mask = _enforce_max_features(mask, max_features, rng=rng)
+                mask = _enforce_max_features(mask, max_features)
                 if mask.sum() == 0:
-                    idx = rng.randint(0, n_features) if rng is not None else np.random.randint(0, n_features)
+                    idx = rng.randint(0, n_features) 
                     mask[idx] = 1
                 pop[-i] = mask
-            if verbose:
-                print(f"[stagnation] injected {n_replace} random individuals at epoch {epoch}")
+            
+            print(f"[stagnation] injected {n_replace} random individuals at epoch {epoch}")
             no_improve = 0
 
 
@@ -155,20 +140,21 @@ def bwo_select(X_train_scaled,
                stagnation_inject_every=10, 
                inject_fraction=0.25,
                alpha=0.05, 
-               cv_folds=5, 
-               scoring='accuracy',
-               seed=42, 
-               verbose=False,
+               max_features=150
                ):
    
+    global rng
+    rng = np.random.default_rng(42)
+    
     print("Selecting best features from BWO...")
+    
     n_features = X_train_scaled.shape[1]
     
     clf_bwo = LogisticRegression(
         penalty="l2",
         C=0.1,
         solver="liblinear",
-        max_iter=5000,
+        max_iter=2000,
         random_state=42
         )
     
@@ -178,8 +164,8 @@ def bwo_select(X_train_scaled,
             return -1.0 
         
         X_sub = X_train_scaled[:, mask]
-        skf = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=seed)
-        scores = cross_val_score(clf_bwo, X_sub, y_train, cv=skf, scoring=scoring, n_jobs=1)
+        skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+        scores = cross_val_score(clf_bwo, X_sub, y_train, cv=skf, scoring='accuracy', n_jobs=1)
         mean_score = float(np.mean(scores))
         sparsity_pen = alpha * (mask.sum() / n_features)
         score = mean_score - sparsity_pen
@@ -195,9 +181,7 @@ def bwo_select(X_train_scaled,
         mutation_prob=mutation_prob,
         stagnation_inject_every=stagnation_inject_every,
         inject_fraction=inject_fraction,
-        seed=seed,
-        verbose=verbose,
-        max_features=150
+        max_features=max_features
     )
 
     selected_indices = np.where(best_mask == 1)[0]

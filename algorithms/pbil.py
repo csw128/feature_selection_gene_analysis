@@ -1,22 +1,22 @@
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
 
 
 """
 PBIL (Population-Based Incremental Learning)
 """
-rng = np.random.default_rng(42)
-
 # Fitness function
-def fitness(ind, X, y, alpha=0.01):
+def fitness(ind, X, y, alpha=None):
     n_selected = ind.sum()
     if n_selected == 0:
         return 0
+    
     X_sel = X[:, ind==1]
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     clf = LogisticRegression(solver="liblinear", max_iter=2000)
-    score = cross_val_score(clf, X_sel, y, cv=5, scoring="accuracy").mean()
+    score = cross_val_score(clf, X_sel, y, cv=skf, scoring="accuracy").mean()
     penalty = alpha * (n_selected / X.shape[1])
     return score - penalty
 
@@ -30,8 +30,10 @@ def pbil_select(X_train_scaled,
                 alpha=0.1, 
                 init_prob=0.05, 
                 max_features=150,
-                verbose=False
                 ):
+    
+    global rng
+    rng = np.random.default_rng(42)
     
     print("Selecting best features from GA PBIL...")
     n_features = X_train_scaled.shape[1]
@@ -65,8 +67,7 @@ def pbil_select(X_train_scaled,
         # Update probability vector toward best individual
         p = (1 - learning_rate) * p + learning_rate * best_mask
 
-        if verbose:
-            print(f"PBIL | Gen {gen} | best_score={best_score:.3f} | n_features={best_mask.sum()}")
+        print(f"PBIL | Gen {gen} | best_score={best_score:.3f} | n_features={best_mask.sum()}")
         
     # Return indices of selected features
     selected_indices = np.where(best_mask==1)[0]

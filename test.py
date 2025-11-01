@@ -15,8 +15,6 @@ X, y = make_classification(
     random_state=42
 )
 
-rng = np.random.default_rng(42)
-
 
 # foldlist = create_outer_foldlist(n_samples=40, n_folds=10, n_repeats=10)
 
