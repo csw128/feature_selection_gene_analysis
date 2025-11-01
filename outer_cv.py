@@ -1,32 +1,13 @@
-# Outer CV 
-
-from utils import normalize_train_test, evaluate_svm
+from utils import normalize_train_test, train_and_predict_labels
 from algorithms.random_filter import random_select
 from algorithms.pearson_corr import pearson_select
 from algorithms.svmrfe import svm_rfe
 from algorithms.pbil import pbil_select
 from algorithms.sa import sa_select
 from algorithms.bwo import bwo_select
-import pandas as pd
+from collections import Counter
+import numpy as np
 
-
-outer_results = {
-        'rand_sel': [],
-        'pear_corr': [],
-        'svm_rfe': [],
-        'pbil': [],
-        'sa': [],
-        'bwo': []
-    }
-
-outer_selected_features = {
-        'rand_sel': [],
-        'pear_corr': [],
-        'svm_rfe': [],
-        'pbil': [],
-        'sa': [],
-        'bwo': []
-    }
 
 selectors = {
         'rand_sel': lambda Xtr, ytr: random_select(Xtr),
@@ -36,152 +17,100 @@ selectors = {
         'sa': lambda Xtr, ytr: sa_select(Xtr, ytr, verbose=True),
         'bwo': lambda Xtr, ytr: bwo_select(Xtr, ytr, verbose=True)
     }
-    
-def run_and_store(algo, selector_fn, X_train_scaled, y_train, X_test_scaled, y_test):
-    # run selector
-    best_features = selector_fn(X_train_scaled, y_train)
-    # store selected features
-    outer_selected_features[algo].append(best_features)
-    # evaluate SVM classifier using selected features on test set
-    metrics = evaluate_svm(X_train_scaled[:, best_features], y_train,
-                            X_test_scaled[:, best_features], y_test)
-    # store results
-    outer_results[algo].append(metrics)
-        
 
-# 8-2 split
+
+# 9-1 split
 def nested_cv_experiment(X, y, foldlist):
-    # loop over outer repetitions
+    
+    n_samples = X.shape[0]
+    
+    outer_results = {algo: [] for algo in selectors.keys()}  
+    outer_selected_features = {algo: [] for algo in selectors.keys()} 
+    outer_selected_features_agg = {algo: [] for algo in selectors.keys()}
+    
+    # Loop over outer repetitions
     for repeat_idx, outer_folds in enumerate(foldlist):
-        n_folds = len(outer_folds)
-        step = 2
-        test_pairs = [(i, i+1) for i in range(0, n_folds, step) if i+1 < n_folds]
         
-        # loop over outer iterations 
-        for iter_idx, (f1, f2) in enumerate(test_pairs):
-            print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {iter_idx+1}/{len(test_pairs)}")
-            
-            # split train/test
-            test_idx = outer_folds[f1] + outer_folds[f2]
-            
-            train_idx = []
-            for idx_fold, fold in enumerate(outer_folds):
-                if idx_fold not in (f1, f2):
-                    train_idx.extend(fold)
-            
-            train_idx = sorted(set(train_idx))
-            test_idx = sorted(set(test_idx))
+        preds_per_algo = {algo: np.full(n_samples, -1, dtype=int) for algo in selectors.keys()}
+        per_iter_selected = {algo: [] for algo in selectors.keys()}
+
+        # Loop over outer iterations (test fold = 1 fold)
+        for test_fold_idx in range(len(outer_folds)):
+            print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
+              
+            # Split train/test
+            test_idx = outer_folds[test_fold_idx]
+            train_idx = [i for idx, fold in enumerate(outer_folds) if idx != test_fold_idx for i in fold]
             
             X_train, y_train = X[train_idx, :], y[train_idx]
             X_test, y_test = X[test_idx, :], y[test_idx]
             
             # normalize train/test
             X_train_scaled, X_test_scaled = normalize_train_test(X_train, X_test)
-            print("Normalised current fold train test set.")
             
             # run all selectors and evaluations 
             for algo, selector_fn in selectors.items():
-                run_and_store(algo, selector_fn, X_train_scaled, y_train, X_test_scaled, y_test)
-
-            ## print results
-            print(f'Outer Results: Repeat {repeat_idx+1}/{len(foldlist)}, k fold {iter_idx+1}/{len(test_pairs)}')
-            for k, v in outer_results.items():
-                print(k, v)
+                best_features = selector_fn(X_train_scaled, y_train)
+                best_features = np.asarray(best_features, dtype=int)
             
-            break
+                # store per-iteration selection
+                outer_selected_features[algo].append(best_features.copy())
+                per_iter_selected[algo].append(best_features.copy())
+                
+                # train SVM on selected features
+                y_pred = train_and_predict_labels(X_train_scaled[:, best_features], y_train,
+                                                          X_test_scaled[:, best_features])
+            
+                preds_per_algo[algo][test_idx] = y_pred
         
+        # after finishing all folds in this repeat, compute accuracy per algorithm
+        repeat_indices = sorted(set(sum(outer_folds, [])))
+        y_true_repeat = y[repeat_indices]
+        
+        print(f"Finished repeat {repeat_idx+1}. Accuracies this repeat:")
+        
+        for algo in selectors.keys():
+            preds = preds_per_algo[algo][repeat_indices]
+            acc = (preds == y_true_repeat).mean()
+
+            outer_results[algo].append(float(acc))
+
+            # aggregate selected feature summary for this repeat    
+            all_feats = np.concatenate(per_iter_selected[algo]) if per_iter_selected[algo] else np.array([], dtype=int)
+            freq_counter = Counter(all_feats.tolist())
+            union_feats = np.array(sorted(freq_counter.keys()), dtype=int)
+
+            # store aggregated info for this repeat
+            agg_info = {
+                "repeat_idx": repeat_idx,
+                "union_features": union_feats,
+                "feature_freq": dict(freq_counter),       
+                "per_iteration_features": per_iter_selected[algo]  
+            }
+            outer_selected_features_agg[algo].append(agg_info)
+
+        for algo in selectors.keys():
+            print(f"  {algo}: {outer_results[algo][-1]:.4f}")
+         
         break
-        ## 
     
-    # # Aggregate results
+    # # After all repeats: aggregate summary (mean ± std for accuracy)
     # summary = {}
-
-    # for algo, results in outer_results.items():
-    #     df = pd.DataFrame(results)
-        
-    #     # Compute mean and std for each metric
-    #     mean_metrics = df.mean(numeric_only=True)
-    #     std_metrics = df.std(numeric_only=True)
-        
-    #     # Combine into a summary dict
+    # for algo, acc_list in outer_results.items():
+    #     arr = np.array(acc_list, dtype=float)
     #     summary[algo] = {
-    #         metric: {"mean": mean_metrics[metric], "std": std_metrics[metric]}
-    #         for metric in mean_metrics.index
+    #         "accuracy_mean": float(np.nanmean(arr)),
+    #         "accuracy_std": float(np.nanstd(arr)),
+    #         "n_repeats": len(arr)
     #     }
-
-    # return summary, outer_selected_features
-
-
-
-
-
-# # 9-1 split
-# def nested_cv_experiment(X, y, foldlist):
-#     outer_results = {
-#         'svm_rfe': [],
-#         'pbil': [],
-#         'bwo': []
-#     }
-
-#     outer_selected_features = {
-#     'svm_rfe': [],
-#     'pbil': [],
-#     'bwo': []
-#     }
-
-#     # Loop over outer repetitions
-#     for repeat_idx, outer_folds in enumerate(foldlist):
-        
-#         # Loop over outer iterations (test fold = 1 fold)
-#         for test_fold_idx in range(len(outer_folds)):
-#             print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
-            
-#             # Split train/test
-#             test_idx = outer_folds[test_fold_idx]
-#             train_idx = [i for fold in outer_folds if fold != test_fold_idx for i in fold]  # flatten
-            
-#             X_train, y_train = X[train_idx, :], y[train_idx]
-#             X_test, y_test = X[test_idx, :], y[test_idx]
-#             print("Split current fold train test set.")
-            
-#             # Normalize train/test
-#             X_train_scaled, X_test_scaled = normalize_train_test(X_train, X_test)
-#             print("Normalised current fold train test set.")
-            
-#             # Run feature selection algorithms to return the best feature indices
-#             best_features_svm = svm_rfe(X_train_scaled, y_train)
-#             best_features_ga = ga_select(X_train_scaled, y_train, verbose=True)
-#             best_features_bwo = bwo_select(X_train_scaled, y_train, verbose=True)
-            
-#             # Store best features for record
-#             outer_selected_features['svm_rfe'].append(best_features_svm)
-#             outer_selected_features['pbil'].append(best_features_ga)
-#             outer_selected_features['bwo'].append(best_features_bwo)
-
-#             # Evaluate SVM on the selected features 
-#             metrics_svm = evaluate_svm(X_train_scaled[:, best_features_svm], y_train,
-#                                    X_test_scaled[:, best_features_svm], y_test)
-            
-#             metrics_ga = evaluate_svm(X_train_scaled[:, best_features_ga], y_train,
-#                                   X_test_scaled[:, best_features_ga], y_test)
-            
-#             metrics_bwo = evaluate_svm(X_train_scaled[:, best_features_bwo], y_train,
-#                                    X_test_scaled[:, best_features_bwo], y_test)
-            
-#             # Store results
-#             outer_results['svm_rfe'].append(metrics_svm)
-#             outer_results['pbil'].append(metrics_ga)
-#             outer_results['bwo'].append(metrics_bwo)
-
-#             print("outer results: ")
-#             for k, v in outer_results.items():
-#                print(k, v)
-            
-#             break
-        
-#         break
-    
-#     # # Aggregate results
-#     # summary = {algo: (np.mean(scores), np.std(scores)) for algo, scores in outer_results.items()}
-#     # return summary
-
+    #     # feature union count stats
+    #     union_counts = [len(info["union_features"]) for info in outer_selected_features_agg[algo]]
+    #     summary[algo]["n_features_mean"] = float(np.mean(union_counts)) if union_counts else 0.0
+    #     summary[algo]["n_features_std"] = float(np.std(union_counts)) if union_counts else 0.0
+      
+    # return {
+    #     "outer_results": outer_results,
+    #     "outer_selected_features": outer_selected_features,
+    #     "outer_selected_features_agg": outer_selected_features_agg,
+    #     "summary": summary
+    # }
