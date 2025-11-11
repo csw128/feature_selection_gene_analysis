@@ -2,6 +2,13 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
+import logging
+
+logging.basicConfig(
+    filename='test.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(message)s'
+)
 
 
 """
@@ -24,18 +31,17 @@ def fitness(ind, X, y, alpha=None):
 # PBIL-style GA 
 def pbil_select(X_train_scaled, 
                 y_train, 
-                generations=20, 
-                pop_size=30, 
+                pop_size=5,
+                generations=2, 
                 learning_rate=0.3,
                 alpha=0.1, 
                 init_prob=0.05, 
                 max_features=150,
                 ):
     
-    global rng
     rng = np.random.default_rng(42)
     
-    print("Selecting best features from GA PBIL...")
+    logging.info("Selecting best features from GA PBIL...")
     n_features = X_train_scaled.shape[1]
 
     # Initialize feature probability vector
@@ -67,10 +73,10 @@ def pbil_select(X_train_scaled,
         # Update probability vector toward best individual
         p = (1 - learning_rate) * p + learning_rate * best_mask
 
-        print(f"PBIL | Gen {gen} | best_score={best_score:.3f} | n_features={best_mask.sum()}")
+        logging.info(f"PBIL | Gen {gen} | best_score={best_score:.3f} | n_features={best_mask.sum()}")
         
     # Return indices of selected features
     selected_indices = np.where(best_mask==1)[0]
-    print("Done selecting best features from GA PBIL.")
+    logging.info("Done selecting best features from GA PBIL.")
     
     return selected_indices

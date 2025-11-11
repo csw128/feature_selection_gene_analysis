@@ -1,11 +1,18 @@
 import numpy as np
+import logging
+
+logging.basicConfig(
+    filename='test.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(message)s'
+)
 
 
 '''
 Filter method: Pearson correlation
 '''
 def pearson_select(X_train, y_train, max_features=100, random_state=42):
-    print("Selecting best features from Pearson Correlation...")
+    logging.info("Selecting best features from Pearson Correlation...")
     
     X = np.asarray(X_train, dtype=float)
     y = np.asarray(y_train, dtype=float)
@@ -38,6 +45,6 @@ def pearson_select(X_train, y_train, max_features=100, random_state=42):
     topk_idx = np.argpartition(-abs_corr, k-1)[:k]
     topk_idx = topk_idx[np.argsort(-abs_corr[topk_idx])]
 
-    print("Done selecting best features from Pearson Correlation.")
+    logging.info("Done selecting best features from Pearson Correlation.")
 
     return sorted(topk_idx.tolist())

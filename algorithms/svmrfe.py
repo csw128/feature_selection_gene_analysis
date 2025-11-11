@@ -2,13 +2,20 @@ from sklearn.svm import SVC
 from sklearn.feature_selection import RFECV
 from sklearn.model_selection import StratifiedKFold
 import numpy as np
+import logging
+
+logging.basicConfig(
+    filename='test.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(message)s'
+)
 
 
 """
 SVM RFECV
 """
 def svm_rfe(X_train_scaled, y_train):
-    print("Selecting best features from SVM RFECV...")
+    logging.info("Selecting best features from SVM RFECV...")
     
     # Define SVM with balanced class weight
     svm_model = SVC(kernel="linear", random_state=42)

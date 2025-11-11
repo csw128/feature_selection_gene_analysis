@@ -2,6 +2,13 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
+import logging
+
+logging.basicConfig(
+    filename='test.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(message)s'
+)
 
 
 """
@@ -83,7 +90,7 @@ def simple_ga(X,
             best_score = gen_best_score
             best_mask = gen_best_mask.copy()
 
-        print(f"GA | Gen {gen} | best_score={gen_best_score:.3f} | n_features={gen_best_mask.sum()}")
+        logging.info(f"GA | Gen {gen} | best_score={gen_best_score:.3f} | n_features={gen_best_mask.sum()}")
 
         # Elitism 
         new_pop = []
@@ -113,8 +120,8 @@ def simple_ga(X,
 
 
 def ga_select(X_train_scaled, y_train,
-              pop_size=30,
-              generations=20,
+              pop_size=5,
+              generations=2,
               crossover_rate=0.7,
               mutation_rate=0.01,
               max_features=150,
@@ -123,7 +130,7 @@ def ga_select(X_train_scaled, y_train,
 
     global rng
     rng = np.random.default_rng(42)
-    print("Selecting best features from GA...")
+    logging.info("Selecting best features from GA...")
     
     best_mask, best_score = simple_ga(
         X_train_scaled, y_train,
@@ -137,6 +144,6 @@ def ga_select(X_train_scaled, y_train,
    
     best_mask = np.asarray(best_mask)
     selected_indices = np.where(best_mask == 1)[0]
-    print("Done selecting best features from GA.")
+    logging.info("Done selecting best features from GA.")
     
     return selected_indices

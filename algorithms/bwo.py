@@ -2,6 +2,13 @@ import numpy as np
 import random
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
+import logging
+
+logging.basicConfig(
+    filename='test.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(message)s'
+)
 
 
 """
@@ -24,8 +31,8 @@ def _enforce_max_features(mask, max_features):
 def bwo_minimize(
     objective_cv_func,        
     n_features,
-    npop=None,
-    maxiter=None,
+    pop_size=None,
+    generations=None,
     elitism=None,
     crossover_prob=None,
     mutation_prob=None,      
@@ -36,7 +43,7 @@ def bwo_minimize(
     
     # initialize population
     pop = []
-    for _ in range(npop):
+    for _ in range(pop_size):
         mask = np.random.choice([0,1], size=n_features).astype(int)
         mask = _enforce_max_features(mask, max_features)
         if mask.sum() == 0:
@@ -58,7 +65,7 @@ def bwo_minimize(
     best_mask = None
     no_improve = 0
 
-    for epoch in range(1, maxiter+1):
+    for epoch in range(1, generations+1):
         scores = [eval_mask(m) for m in pop]
         idx_sorted = np.argsort(scores)[::-1]
         pop = [pop[i] for i in idx_sorted]
@@ -74,15 +81,15 @@ def bwo_minimize(
 
         median_score = np.median(scores)
         n_features_best = best_mask.sum()
-        print(f"BWO | Gen {epoch} | best_score={best_score:.6f} | median_score={median_score:.6f} | n_features_best={n_features_best}")
+        logging.info(f"BWO | Gen {epoch} | best_score={best_score:.6f} | median_score={median_score:.6f} | n_features_best={n_features_best}")
 
         # elitism
         new_pop = [pop[i].copy() for i in range(elitism)]
 
         # generate offspring
-        while len(new_pop) < npop:
+        while len(new_pop) < pop_size:
             def tournament():
-                contenders = np.random.choice(npop, size=3, replace=False)
+                contenders = np.random.choice(pop_size, size=3, replace=False)
                 best = max(contenders, key=lambda i: scores[i])
                 return pop[best]
 
@@ -114,7 +121,7 @@ def bwo_minimize(
 
         # stagnation injection
         if no_improve >= stagnation_inject_every:
-            n_replace = max(1, int(inject_fraction * npop))
+            n_replace = max(1, int(inject_fraction * pop_size))
             for i in range(1, n_replace+1):
                 mask = np.random.choice([0,1], size=n_features).astype(int)
                 mask = _enforce_max_features(mask, max_features)
@@ -123,7 +130,7 @@ def bwo_minimize(
                     mask[idx] = 1
                 pop[-i] = mask
             
-            print(f"[stagnation] injected {n_replace} random individuals at epoch {epoch}")
+            logging.info(f"[stagnation] injected {n_replace} random individuals at epoch {epoch}")
             no_improve = 0
 
 
@@ -132,8 +139,8 @@ def bwo_minimize(
 
 def bwo_select(X_train_scaled, 
                y_train,
-               npop=30, 
-               maxiter=20, 
+               pop_size=5, 
+               generations=2, 
                elitism=2,
                crossover_prob=0.9, 
                mutation_prob=0.02,
@@ -146,7 +153,7 @@ def bwo_select(X_train_scaled,
     global rng
     rng = np.random.default_rng(42)
     
-    print("Selecting best features from BWO...")
+    logging.info("Selecting best features from BWO...")
     
     n_features = X_train_scaled.shape[1]
     
@@ -174,8 +181,8 @@ def bwo_select(X_train_scaled,
     best_score, best_mask, _ = bwo_minimize(
         objective_cv_func=objective,
         n_features=n_features,
-        npop=npop,
-        maxiter=maxiter,
+        pop_size=pop_size,
+        generations=generations,
         elitism=elitism,
         crossover_prob=crossover_prob,
         mutation_prob=mutation_prob,
@@ -185,6 +192,6 @@ def bwo_select(X_train_scaled,
     )
 
     selected_indices = np.where(best_mask == 1)[0]
-    print("Done selecting best features from BWO.")
+    logging.info("Done selecting best features from BWO.")
     
     return selected_indices

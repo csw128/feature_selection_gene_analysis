@@ -8,6 +8,16 @@ from algorithms.sa import sa_select
 from algorithms.bwo import bwo_select
 from collections import Counter
 import numpy as np
+import time
+import logging
+
+logging.basicConfig(
+    filename='test.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(message)s'
+)
+
+logging.info("Logging - Test start.")
 
 
 selectors = {
@@ -23,10 +33,11 @@ selectors = {
 # 9-1 split
 def nested_cv_experiment(X, y, foldlist):
     
+    start = time.time()
+    
     n_samples = X.shape[0]
     
     outer_results = {algo: [] for algo in selectors.keys()}  
-    outer_selected_features = {algo: [] for algo in selectors.keys()} 
     outer_selected_features_agg = {algo: [] for algo in selectors.keys()}
     
     # Loop over outer repetitions
@@ -38,6 +49,7 @@ def nested_cv_experiment(X, y, foldlist):
         # Loop over outer iterations (test fold = 1 fold)
         for test_fold_idx in range(len(outer_folds)):
             print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
+            logging.info(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
               
             # Split train/test
             test_idx = outer_folds[test_fold_idx]
@@ -55,7 +67,6 @@ def nested_cv_experiment(X, y, foldlist):
                 best_features = np.asarray(best_features, dtype=int)
             
                 # store per-iteration selection
-                outer_selected_features[algo].append(best_features.copy())
                 per_iter_selected[algo].append(best_features.copy())
                 
                 # train SVM on selected features
@@ -68,7 +79,7 @@ def nested_cv_experiment(X, y, foldlist):
         repeat_indices = sorted(set(sum(outer_folds, [])))
         y_true_repeat = y[repeat_indices]
         
-        print(f"Finished repeat {repeat_idx+1}. Accuracies this repeat:")
+        logging.info(f"Finished repeat {repeat_idx+1}. Accuracies this repeat:")
         
         for algo in selectors.keys():
             preds = preds_per_algo[algo][repeat_indices]
@@ -84,34 +95,32 @@ def nested_cv_experiment(X, y, foldlist):
             # store aggregated info for this repeat
             agg_info = {
                 "repeat_idx": repeat_idx,
-                "union_features": union_feats,
+                "union_features": union_feats.tolist(),
                 "feature_freq": dict(freq_counter),       
-                "per_iteration_features": per_iter_selected[algo]  
+                "per_iteration_features": [arr.tolist() for arr in per_iter_selected[algo]]  
             }
             outer_selected_features_agg[algo].append(agg_info)
 
         for algo in selectors.keys():
-            print(f"{algo}: {outer_results[algo][-1]:.4f}")
+            logging.info(f"{algo}: {outer_results[algo][-1]:.4f}")
          
-        break
+        # break
     
-    # # After all repeats: aggregate summary (mean ± std for accuracy)
-    # summary = {}
-    # for algo, acc_list in outer_results.items():
-    #     arr = np.array(acc_list, dtype=float)
-    #     summary[algo] = {
-    #         "accuracy_mean": float(np.nanmean(arr)),
-    #         "accuracy_std": float(np.nanstd(arr)),
-    #         "n_repeats": len(arr)
-    #     }
-    #     # feature union count stats
-    #     union_counts = [len(info["union_features"]) for info in outer_selected_features_agg[algo]]
-    #     summary[algo]["n_features_mean"] = float(np.mean(union_counts)) if union_counts else 0.0
-    #     summary[algo]["n_features_std"] = float(np.std(union_counts)) if union_counts else 0.0
-      
-    # return {
-    #     "outer_results": outer_results,
-    #     "outer_selected_features": outer_selected_features,
-    #     "outer_selected_features_agg": outer_selected_features_agg,
-    #     "summary": summary
-    # }
+    # Aggregate summary (mean ± std for accuracy)
+    summary = {}
+    for algo, acc_list in outer_results.items():
+        arr = np.array(acc_list, dtype=float)
+        summary[algo] = {
+            "accuracy_mean": float(np.nanmean(arr)),
+            "accuracy_std": float(np.nanstd(arr)),
+        }
+    
+    end = time.time()
+    print(f"Total runtime: {(end - start)/60} minutes")
+    logging.info(f"Total runtime: {(end - start)/60} minutes")
+    
+    return {
+        "outer_results": outer_results,
+        "outer_selected_features_agg": outer_selected_features_agg,
+        "summary": summary
+    }

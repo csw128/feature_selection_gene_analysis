@@ -2,21 +2,23 @@ from sklearn.datasets import make_classification
 import numpy as np
 from outer_cv import nested_cv_experiment
 from utils import create_outer_foldlist
+import pandas as pd
+import json
 
+# # Synthetic dataset
+# X, y = make_classification(
+#     n_samples=40,
+#     n_features=2000,
+#     n_informative=100,
+#     n_redundant=5,
+#     n_repeated=0,
+#     n_classes=2,
+#     random_state=42
+# )
 
-# Synthetic dataset
-X, y = make_classification(
-    n_samples=40,
-    n_features=2000,
-    n_informative=100,
-    n_redundant=5,
-    n_repeated=0,
-    n_classes=2,
-    random_state=42
-)
+ 
 
-
-# foldlist = create_outer_foldlist(n_samples=40, n_folds=10, n_repeats=10)
+# # foldlist = create_outer_foldlist(n_samples=40, n_folds=10, n_repeats=10)
 
 foldlist = [
     [[32, 7, 39, 18], [4, 37, 16, 5], [25, 28, 21, 20], [35, 24, 10, 27], [31, 30, 26, 6], [29, 11, 23, 9], [36, 22, 19, 3], [0, 15, 17, 34], [12, 14, 38, 2], [33, 1, 13, 8]], 
@@ -31,7 +33,19 @@ foldlist = [
     [[9, 24, 27, 13], [38, 31, 16, 29], [35, 23, 1, 8], [11, 4, 14, 2], [20, 39, 25, 5], [32, 0, 12, 15], [3, 28, 22, 17], [36, 26, 6, 33], [30, 34, 7, 19], [18, 37, 10, 21]]
     ]
 
-summary, features = nested_cv_experiment(X, y, foldlist)
+# results = nested_cv_experiment(X, y, foldlist)
+
+# Golub data
+df = pd.read_csv("dataset/golub/golub_reduced.csv")
+X = df.drop(columns=["cancer"]).values 
+y = df["cancer"].values  
+
+golub_test_results = nested_cv_experiment(X, y, foldlist)
+
+with open("results/golub_test_results.json", "w") as f:
+    json.dump(golub_test_results, f, indent=2)
+    print("saved results to json")
+    
 
 
 

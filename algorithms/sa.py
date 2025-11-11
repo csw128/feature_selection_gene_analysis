@@ -2,6 +2,13 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold, cross_val_score
 from sklearn.linear_model import LogisticRegression
 from math import exp
+import logging
+
+logging.basicConfig(
+    filename='test.log',
+    level=logging.INFO,
+    format='%(asctime)s %(levelname)s:%(message)s'
+)
 
 
 """
@@ -20,7 +27,7 @@ def fitness(ind, X, y, alpha=None, cache=None):
         return val
 
     X_sel = X[:, ind]
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=None)
     clf = LogisticRegression(solver="liblinear", max_iter=2000)
     score = cross_val_score(clf, X_sel, y, cv=skf, scoring="accuracy").mean()
     penalty = alpha * (n_selected / X.shape[1])
@@ -41,6 +48,8 @@ def simulated_annealing_feature_selection(X, y,
                                           min_temp=None,
                                           ):
     
+    rng = np.random.default_rng()
+   
     n_features = X.shape[1]
     cache = {}
 
@@ -100,7 +109,7 @@ def simulated_annealing_feature_selection(X, y,
 
         history.append((gen, best_score, best.sum()))
         
-        print(f"SA | Gen {gen:3d} | temp={T:.4f} | current_score={current_score:.4f} | best_score={best_score:.4f} | n_features={best.sum():4d}")
+        logging.info(f"SA | Gen {gen:3d} | temp={T:.4f} | current_score={current_score:.4f} | best_score={best_score:.4f} | n_features={best.sum():4d}")
 
         T = max(min_temp, T * cooling_rate)
 
@@ -112,7 +121,7 @@ def simulated_annealing_feature_selection(X, y,
 
 def sa_select(X_train_scaled, 
               y_train,
-              max_generations=20,
+              max_generations=2,
               max_features=150,
               alpha=0.05,
               initial_temp=1.5,
@@ -120,10 +129,7 @@ def sa_select(X_train_scaled,
               min_temp=1e-4,
               ):
     
-    global rng
-    rng = np.random.default_rng(42)
-    
-    print("Selecting best features from SA...")
+    logging.info("Selecting best features from SA...")
     
     res = simulated_annealing_feature_selection(
         X_train_scaled,               
@@ -140,6 +146,6 @@ def sa_select(X_train_scaled,
     best_mask = res.get("best_mask")
     selected_indices = np.where(np.asarray(best_mask, dtype=bool))[0]
     
-    print("Done selecting best features from SA.")
+    logging.info("Done selecting best features from SA.")
     
     return selected_indices
