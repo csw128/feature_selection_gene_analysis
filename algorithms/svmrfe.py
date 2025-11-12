@@ -37,6 +37,6 @@ def svm_rfe(X_train_scaled, y_train):
     
     # Get selected feature indices
     selected_indices = np.where(selector_rfecv.support_)[0]
-    print("Done selecting best features from SVM RFECV.")
+    logging.info("Done selecting best features from SVM RFECV.")
     
     return selected_indices

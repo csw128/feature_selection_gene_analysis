@@ -6,7 +6,7 @@ from algorithms.ga import ga_select
 from algorithms.pbil import pbil_select
 from algorithms.sa import sa_select
 from algorithms.bwo import bwo_select
-from collections import Counter
+from collections import Counter, OrderedDict
 import numpy as np
 import time
 import logging
@@ -106,7 +106,8 @@ def nested_cv_experiment(X, y, foldlist):
          
         # break
     
-    # Aggregate summary (mean ± std for accuracy)
+    
+    ## Aggregate summary (mean ± std for accuracy)
     summary = {}
     for algo, acc_list in outer_results.items():
         arr = np.array(acc_list, dtype=float)
@@ -115,6 +116,18 @@ def nested_cv_experiment(X, y, foldlist):
             "accuracy_std": float(np.nanstd(arr)),
         }
     
+    total_feature_freq = {}
+    # sum total feature freq across all repeats
+    for algo, agg_list in outer_selected_features_agg.items():
+        total_counter = Counter()
+        for rep_info in agg_list:
+            total_counter.update(rep_info.get("feature_freq", {}))
+
+        # sort descending freq
+        sorted_pairs = sorted(total_counter.items(), key=lambda kv: kv[1], reverse=True)
+        total_feature_freq[algo] = {str(int(k)): int(v) for k, v in sorted_pairs}
+        
+    
     end = time.time()
     print(f"Total runtime: {(end - start)/60} minutes")
     logging.info(f"Total runtime: {(end - start)/60} minutes")
@@ -122,5 +135,6 @@ def nested_cv_experiment(X, y, foldlist):
     return {
         "outer_results": outer_results,
         "outer_selected_features_agg": outer_selected_features_agg,
-        "summary": summary
+        "summary": summary,
+        "total_feature_freq": total_feature_freq
     }
