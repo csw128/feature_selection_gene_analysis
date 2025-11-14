@@ -36,7 +36,7 @@ foldlist = [
 # results = nested_cv_experiment(X, y, foldlist)
 
 # Golub data
-df = pd.read_csv("dataset/golub/golub_reduced.csv")
+df = pd.read_csv("dataset/GB/reduced.csv")
 X = df.drop(columns=["cancer"]).values 
 y = df["cancer"].values  
 
