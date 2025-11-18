@@ -35,17 +35,50 @@ foldlist = [
 
 # results = nested_cv_experiment(X, y, foldlist)
 
-# Golub data
-df = pd.read_csv("dataset/GB/reduced.csv")
-X = df.drop(columns=["cancer"]).values 
-y = df["cancer"].values  
 
-golub_test_results = nested_cv_experiment(X, y, foldlist)
+# # GB
+# df_gb = pd.read_csv("dataset/GB/reduced.csv")
+# X_gb = df_gb.drop(columns=["label"]).values 
+# y_gb = df_gb["label"].values  
 
-with open("results/golub_test_results.json", "w") as f:
-    json.dump(golub_test_results, f, indent=2)
+# golub_test_results = nested_cv_experiment(X_gb, y_gb, foldlist)
+
+# with open("results/golub_test_results.json", "w") as f:
+#     json.dump(golub_test_results, f, indent=2)
+#     print("saved results to json")
+    
+
+# GSE48558
+df_48558 = pd.read_csv("dataset/GSE48558/reduced.csv")
+X_48558 = df_48558.drop(columns=["label"]).values 
+y_48558 = df_48558["label"].values  
+
+gse48558_test_results = nested_cv_experiment(X_48558, y_48558, foldlist)
+
+with open("results/GSE48558_test_results.json", "w") as f:
+    json.dump(gse48558_test_results, f, indent=2)
     print("saved results to json")
     
 
+# # GSE25136
+# df_25136 = pd.read_csv("dataset/GSE25136/reduced.csv")
+# X_25136 = df_25136.drop(columns=["label"]).values 
+# y_25136 = df_25136["label"].values  
 
+# gse25136_test_results = nested_cv_experiment(X_25136, y_25136, foldlist)
 
+# with open("results/GSE25136_test_results.json", "w") as f:
+#     json.dump(gse25136_test_results, f, indent=2)
+#     print("saved results to json")
+    
+
+# # GSE10072
+# df_10072 = pd.read_csv("dataset/GSE10072/reduced.csv")
+# X_10072 = df_10072.drop(columns=["label"]).values 
+# y_10072 = df_10072["label"].values  
+
+# gse10072_test_results = nested_cv_experiment(X_10072, y_10072, foldlist)
+
+# with open("results/GSE10072_test_results.json", "w") as f:
+#     json.dump(gse10072_test_results, f, indent=2)
+#     print("saved results to json")
