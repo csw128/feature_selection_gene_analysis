@@ -6,19 +6,16 @@ from algorithms.ga import ga_select
 from algorithms.pbil import pbil_select
 from algorithms.sa import sa_select
 from algorithms.bwo import bwo_select
-from collections import Counter, OrderedDict
+from collections import Counter
 import numpy as np
 import time
 import logging
 
 logging.basicConfig(
-    filename='test.log',
+    filename='run.log',
     level=logging.INFO,
     format='%(asctime)s %(levelname)s:%(message)s'
 )
-
-logging.info("Logging - Test start.")
-
 
 selectors = {
         'rand_sel': lambda Xtr, ytr: random_select(Xtr),
@@ -40,18 +37,20 @@ def nested_cv_experiment(X, y, foldlist):
     outer_results = {algo: [] for algo in selectors.keys()}  
     outer_selected_features_agg = {algo: [] for algo in selectors.keys()}
     
-    # Loop over outer repetitions
+    # Loop over repeats
     for repeat_idx, outer_folds in enumerate(foldlist):
-        
+ 
         preds_per_algo = {algo: np.full(n_samples, -1, dtype=int) for algo in selectors.keys()}
         per_iter_selected = {algo: [] for algo in selectors.keys()}
 
-        # Loop over outer iterations (test fold = 1 fold)
+        # Loop over folds
+        # fold_start = time.time()
+        
         for test_fold_idx in range(len(outer_folds)):
             print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
             logging.info(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
               
-            # Split train/test
+            # split train/test
             test_idx = outer_folds[test_fold_idx]
             train_idx = [i for idx, fold in enumerate(outer_folds) if idx != test_fold_idx for i in fold]
             
@@ -61,7 +60,7 @@ def nested_cv_experiment(X, y, foldlist):
             # normalize train/test
             X_train_scaled, X_test_scaled = normalize_train_test(X_train, X_test)
             
-            # run all selectors and evaluations 
+            # run all algorithms 
             for algo, selector_fn in selectors.items():
                 best_features = selector_fn(X_train_scaled, y_train)
                 best_features = np.asarray(best_features, dtype=int)
@@ -74,6 +73,9 @@ def nested_cv_experiment(X, y, foldlist):
                                                           X_test_scaled[:, best_features])
             
                 preds_per_algo[algo][test_idx] = y_pred
+        
+            # fold_end = time.time()
+            # print(f"Runtime per fold: {(fold_end - fold_start)/60:.3f} minutes")
         
         # after finishing all folds in this repeat, compute accuracy per algorithm
         repeat_indices = sorted(set(sum(outer_folds, [])))
@@ -90,22 +92,17 @@ def nested_cv_experiment(X, y, foldlist):
             # aggregate selected feature summary for this repeat    
             all_feats = np.concatenate(per_iter_selected[algo]) if per_iter_selected[algo] else np.array([], dtype=int)
             freq_counter = Counter(all_feats.tolist())
-            union_feats = np.array(sorted(freq_counter.keys()), dtype=int)
 
             # store aggregated info for this repeat
             agg_info = {
                 "repeat_idx": repeat_idx,
-                "union_features": union_feats.tolist(),
                 "feature_freq": dict(freq_counter),       
-                "per_iteration_features": [arr.tolist() for arr in per_iter_selected[algo]]  
+                "per_iteration_features": [arr.tolist() for arr in per_iter_selected[algo]],
+                "y_pred": [int(x) for x in preds.tolist()],  
+                "y_true": [int(x) for x in y_true_repeat.tolist()]
             }
             outer_selected_features_agg[algo].append(agg_info)
-
-        for algo in selectors.keys():
-            logging.info(f"{algo}: {outer_results[algo][-1]:.4f}")
-         
-        # break
-    
+            
     
     ## Aggregate summary (mean ± std for accuracy)
     summary = {}

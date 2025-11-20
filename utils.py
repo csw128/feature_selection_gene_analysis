@@ -1,6 +1,6 @@
-import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+import numpy as np
 
 
 def create_outer_foldlist(n_samples, n_folds=10, n_repeats=10, seed=42):
