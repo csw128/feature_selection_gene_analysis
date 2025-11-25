@@ -31,10 +31,10 @@ def fitness(ind, X, y, alpha=None):
 # PBIL-style GA 
 def pbil_select(X_train_scaled, 
                 y_train, 
-                pop_size=5,
-                generations=2, 
+                pop_size=50,
+                generations=100, 
                 learning_rate=0.3,
-                alpha=0.1, 
+                alpha=0.05, 
                 init_prob=0.05, 
                 max_features=150,
                 ):

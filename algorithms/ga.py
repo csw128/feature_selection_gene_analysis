@@ -25,14 +25,17 @@ def init_population(pop_size, n_features, prob=None, max_features=None):
                 ind[ones_idx[max_features:]] = 0
     return pop
 
-def fitness(ind, X, y):
+def fitness(ind, X, y, alpha=None):
+    n_selected = ind.sum()
     if ind.sum() == 0:  
         return 0
+
     X_sel = X[:, ind == 1]
     skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     clf = LogisticRegression(solver="liblinear", max_iter=2000)
-    scores = cross_val_score(clf, X_sel, y, cv=skf, scoring="accuracy")
-    return scores.mean()
+    score = cross_val_score(clf, X_sel, y, cv=skf, scoring="accuracy").mean()
+    penalty = alpha * (n_selected / X.shape[1])
+    return score - penalty
 
 def select(pop, fits):
     total = fits.sum()
@@ -71,6 +74,7 @@ def simple_ga(X,
               crossover_rate=None,
               mutation_rate=None,
               max_features=None,
+              alpha=None,
               elite_size=None):
     
     n_features = X.shape[1]
@@ -80,7 +84,7 @@ def simple_ga(X,
     best_score = -np.inf
 
     for gen in range(generations):
-        fits = np.array([fitness(ind, X, y) for ind in pop])
+        fits = np.array([fitness(ind, X, y, alpha) for ind in pop])
         gen_best_idx = np.argmax(fits)
         gen_best_score = fits[gen_best_idx]
         gen_best_mask = pop[gen_best_idx].copy()
@@ -119,12 +123,14 @@ def simple_ga(X,
     return best_mask, best_score
 
 
-def ga_select(X_train_scaled, y_train,
-              pop_size=5,
-              generations=2,
+def ga_select(X_train_scaled, 
+              y_train,
+              pop_size=50,
+              generations=100,
               crossover_rate=0.7,
               mutation_rate=0.01,
               max_features=150,
+              alpha=0.05,
               elite_size=1
               ):
 
@@ -139,6 +145,7 @@ def ga_select(X_train_scaled, y_train,
         crossover_rate=crossover_rate,
         mutation_rate=mutation_rate,
         max_features=max_features,
+        alpha=alpha,
         elite_size=elite_size
     )
    

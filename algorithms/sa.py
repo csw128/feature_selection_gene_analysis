@@ -121,7 +121,7 @@ def simulated_annealing_feature_selection(X, y,
 
 def sa_select(X_train_scaled, 
               y_train,
-              max_generations=2,
+              max_generations=100,
               max_features=150,
               alpha=0.05,
               initial_temp=1.5,
