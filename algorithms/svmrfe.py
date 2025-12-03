@@ -14,7 +14,7 @@ logging.basicConfig(
 """
 SVM RFECV
 """
-def svm_rfe(X_train_scaled, y_train):
+def svm_rfe(X_train_scaled, y_train, max_features=150):
     logging.info("Selecting best features from SVM RFECV...")
     
     # Define SVM with balanced class weight
@@ -36,7 +36,11 @@ def svm_rfe(X_train_scaled, y_train):
     selector_rfecv.fit(X_train_scaled, y_train)
     
     # Get selected feature indices
-    selected_indices = np.where(selector_rfecv.support_)[0]
+    ranking = selector_rfecv.ranking_  
+    n_features_selected = selector_rfecv.n_features_
+    k = min(max_features, n_features_selected)
+    top_indices = np.argsort(ranking)[:k]
+    
     logging.info("Done selecting best features from SVM RFECV.")
     
-    return selected_indices
+    return np.sort(top_indices)

@@ -11,15 +11,13 @@ logging.basicConfig(
 '''
 Filter method: Pearson correlation
 '''
-def pearson_select(X_train, y_train, max_features=150, random_state=42):
+def pearson_select(X_train, y_train, max_features=150):
     logging.info("Selecting best features from Pearson Correlation...")
     
     X = np.asarray(X_train, dtype=float)
     y = np.asarray(y_train, dtype=float)
 
     n_samples, n_features = X.shape
-    if n_features == 0:
-        return []
 
     # mean
     X_centered = X - X.mean(axis=0)
@@ -37,14 +35,11 @@ def pearson_select(X_train, y_train, max_features=150, random_state=42):
 
     abs_corr = np.abs(corr)
 
-    # randomly pick k between 10 and max_features
-    rng = np.random.default_rng(random_state)
-    k = rng.integers(10, max_features + 1)
-
-    # select top-k features
-    topk_idx = np.argpartition(-abs_corr, k-1)[:k]
+    # select top max features
+    topk_idx = np.argpartition(-abs_corr, max_features-1)[:max_features]
     topk_idx = topk_idx[np.argsort(-abs_corr[topk_idx])]
 
     logging.info("Done selecting best features from Pearson Correlation.")
 
     return sorted(topk_idx.tolist())
+
