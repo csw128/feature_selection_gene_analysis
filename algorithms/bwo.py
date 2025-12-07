@@ -33,26 +33,24 @@ def bwo_minimize(
     n_features,
     pop_size=None,
     generations=None,
-    elitism=None,
+    max_features=None,
+    alpha_children=None,
     crossover_prob=None,
-    mutation_prob=None,      
-    stagnation_inject_every=None,
-    inject_fraction=None,
-    max_features=None         
+    procreate_rate=None,        
+    cannibalism_rate=None,        
+    mutation_rate=None          
 ):
     
     # initialize population
     pop = []
     for _ in range(pop_size):
-        mask = np.random.choice([0,1], size=n_features).astype(int)
+        mask = rng.integers(0, 2, size=n_features).astype(int)
         mask = _enforce_max_features(mask, max_features)
         if mask.sum() == 0:
-            idx = rng.randint(0, n_features)
-            mask[idx] = 1
+            mask[rng.integers(0, n_features)] = 1
         pop.append(mask)
 
     eval_cache = {}
-
     def eval_mask(mask):
         key = tuple(int(b) for b in mask)
         if key in eval_cache:
@@ -80,59 +78,84 @@ def bwo_minimize(
             no_improve += 1
 
         median_score = np.median(scores)
-        n_features_best = best_mask.sum()
-        logging.info(f"BWO | Gen {epoch} | best_score={best_score:.6f} | median_score={median_score:.6f} | n_features_best={n_features_best}")
+        logging.info(f"BWO | Gen {epoch} | best_score={best_score:.6f} | median_score={median_score:.6f} | n_features_best={best_mask.sum()}")
 
-        # elitism
-        new_pop = [pop[i].copy() for i in range(elitism)]
+        # Reproduction
+        nr = max(1, int(pop_size * procreate_rate))
+        pop1 = pop[:nr]  
+        pop2 = []
 
-        # generate offspring
-        while len(new_pop) < pop_size:
-            def tournament():
-                contenders = np.random.choice(pop_size, size=3, replace=False)
-                best = max(contenders, key=lambda i: scores[i])
-                return pop[best]
+        n_pairs = max(1, n_features // 2)
+        
+        for _rep in range(nr):
+            # choose two parents at random from pop1
+            p_idx = rng.choice(len(pop1), size=2, replace=False)
+            par1 = pop1[p_idx[0]].copy()
+            par2 = pop1[p_idx[1]].copy()
 
-            p1 = tournament()
-            p2 = tournament()
+            # generate children 
+            children = []
+            for _p in range(n_pairs):
+                if rng.random() < crossover_prob:
+                    child1 = (alpha_children * par1 + (1 - alpha_children) * par2).round().astype(int)
+                    child2 = (alpha_children * par2 + (1 - alpha_children) * par1).round().astype(int)
+                else:
+                    child1 = par1.copy()
+                    child2 = par2.copy()
 
-            # crossover 
-            if np.random.rand() < crossover_prob:
-                swap = np.random.rand(n_features) < 0.5
-                child = p1.copy()
-                child[swap] = p2[swap]
+                for c in (child1, child2):
+                    c[:] = _enforce_max_features(c, max_features)
+                    if c.sum() == 0:
+                        c[rng.integers(0, n_features)] = 1
+                    children.append(c)
+
+            # cannibalism: destroy weaker parent
+            s1 = eval_mask(par1)
+            s2 = eval_mask(par2)
+            if s1 >= s2:
+                mother = par1.copy()
             else:
-                child = p1.copy()
+                mother = par2.copy()
+                
+            pop2.append(mother)
+            
+            # cannibalism: destroy some children
+            n_survive = max(1, int(ceil((1.0 - cannibalism_rate) * len(children))))
+            if n_survive >= len(children):
+                survivors = children
+            else:
+                # random selection of survivors
+                pick_idx = rng.choice(len(children), size=n_survive, replace=False)
+                survivors = [children[i] for i in pick_idx]
 
-            # mutation:
-            flip = np.random.rand(n_features) < mutation_prob
-            if flip.any():
-                child[flip] = 1 - child[flip]
+            pop2.extend(survivors)
 
-            # enforce limits
-            child = _enforce_max_features(child, max_features)
-            if child.sum() == 0:
-                idx = rng.randint(0, n_features)
-                child[idx] = 1
+        # mutation 
+        nm = int(max(0, round(nr * mutation_rate)))   
+        pop3 = []
+        if nm > 0:
+            nm = min(nm, len(pop1))
+            sel_idx = rng.choice(len(pop1), size=nm, replace=False)
+            for idx in sel_idx:
+                sol = pop1[idx].copy()
+                # mutate one decision variable chosen at random
+                flip_idx = rng.integers(0, n_features)
+                sol[flip_idx] = 1 - sol[flip_idx]
+                sol[:] = _enforce_max_features(sol, max_features)
+                if sol.sum() == 0:
+                    sol[rng.integers(0, n_features)] = 1
+                pop3.append(sol)
 
-            new_pop.append(child)
+        # New population 
+        new_pop = pop2 + pop3
+
+        # If too large, truncate by keeping the best ones (evaluate if needed)
+        if len(new_pop) > pop_size:
+            new_scores = [eval_mask(m) for m in new_pop]
+            idx_sorted_new = np.argsort(new_scores)[::-1]
+            new_pop = [new_pop[i] for i in idx_sorted_new[:pop_size]]
 
         pop = new_pop
-
-        # stagnation injection
-        if no_improve >= stagnation_inject_every:
-            n_replace = max(1, int(inject_fraction * pop_size))
-            for i in range(1, n_replace+1):
-                mask = np.random.choice([0,1], size=n_features).astype(int)
-                mask = _enforce_max_features(mask, max_features)
-                if mask.sum() == 0:
-                    idx = rng.randint(0, n_features) 
-                    mask[idx] = 1
-                pop[-i] = mask
-            
-            logging.info(f"[stagnation] injected {n_replace} random individuals at epoch {epoch}")
-            no_improve = 0
-
 
     return best_score, best_mask, eval_cache
 
@@ -141,13 +164,13 @@ def bwo_select(X_train_scaled,
                y_train,
                pop_size=50,
                generations=100, 
-               elitism=2,
-               crossover_prob=0.7, 
-               mutation_prob=0.01,
-               stagnation_inject_every=10, 
-               inject_fraction=0.25,
                alpha=0.05, 
-               max_features=150
+               alpha_children=0.5,
+               max_features=150,
+               crossover_prob=0.7,
+               procreate_rate=0.5,       
+               cannibalism_rate=0.5,        
+               mutation_rate=0.1         
                ):
    
     global rng
@@ -183,12 +206,12 @@ def bwo_select(X_train_scaled,
         n_features=n_features,
         pop_size=pop_size,
         generations=generations,
-        elitism=elitism,
-        crossover_prob=crossover_prob,
-        mutation_prob=mutation_prob,
-        stagnation_inject_every=stagnation_inject_every,
-        inject_fraction=inject_fraction,
-        max_features=max_features
+        alpha_children=alpha_children,
+        max_features=max_features,
+        crossover_prob=crossover_prob,       
+        procreate_rate=procreate_rate,        
+        cannibalism_rate=cannibalism_rate,        
+        mutation_rate=mutation_rate          
     )
 
     selected_indices = np.where(best_mask == 1)[0]

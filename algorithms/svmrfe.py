@@ -17,7 +17,7 @@ SVM RFECV
 def svm_rfe(X_train_scaled, y_train, max_features=150):
     logging.info("Selecting best features from SVM RFECV...")
     
-    # Define SVM with balanced class weight
+    # Initialize SVM
     svm_model = SVC(kernel="linear", random_state=42)
     
     # 5-fold CV for RFECV

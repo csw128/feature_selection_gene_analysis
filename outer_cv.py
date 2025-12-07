@@ -80,9 +80,7 @@ def nested_cv_experiment(X, y, foldlist):
         # after finishing all folds in this repeat, compute accuracy per algorithm
         repeat_indices = sorted(set(sum(outer_folds, [])))
         y_true_repeat = y[repeat_indices]
-        
-        logging.info(f"Finished repeat {repeat_idx+1}. Accuracies this repeat:")
-        
+         
         for algo in selectors.keys():
             preds = preds_per_algo[algo][repeat_indices]
             acc = (preds == y_true_repeat).mean()
