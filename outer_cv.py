@@ -44,8 +44,6 @@ def nested_cv_experiment(X, y, foldlist):
         per_iter_selected = {algo: [] for algo in selectors.keys()}
 
         # Loop over folds
-        # fold_start = time.time()
-        
         for test_fold_idx in range(len(outer_folds)):
             print(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
             logging.info(f"Repeat {repeat_idx+1}/{len(foldlist)}, k fold {test_fold_idx+1}/{len(outer_folds)}")
@@ -73,9 +71,6 @@ def nested_cv_experiment(X, y, foldlist):
                                                           X_test_scaled[:, best_features])
             
                 preds_per_algo[algo][test_idx] = y_pred
-        
-            # fold_end = time.time()
-            # print(f"Runtime per fold: {(fold_end - fold_start)/60:.3f} minutes")
         
         # after finishing all folds in this repeat, compute accuracy per algorithm
         repeat_indices = sorted(set(sum(outer_folds, [])))
