@@ -1,38 +1,12 @@
 {
-  "outer_results": {
-    "svm_all_features": [
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0,
-      1.0
-    ],
-    "max_apriori": [
-      0.6,
-      0.6,
-      0.6,
-      0.6,
-      0.6,
-      0.6,
-      0.6,
-      0.6,
-      0.6,
-      0.6
-    ]
-  },
   "summary": {
     "svm_all_features": {
       "accuracy_mean": 1.0,
       "accuracy_std": 0.0
     },
     "max_apriori": {
-      "accuracy_mean": 0.5999999999999999,
-      "accuracy_std": 1.1102230246251565e-16
+      "accuracy_mean": 0.6,
+      "accuracy_std": 0.0
     }
   }
 }
